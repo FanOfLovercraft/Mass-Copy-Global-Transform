@@ -1,0 +1,80 @@
+import bpy
+
+# Get the armatures
+armature1 = bpy.data.objects.get('root.004')  # Target armature
+armature2 = bpy.data.objects.get('root')  # Source armature
+
+# Function to get bones sorted by hierarchy (parents first)
+def get_sorted_bones(armature):
+    bones = []
+    for bone in armature.pose.bones:
+        parent = armature.data.bones.get(bone.name).parent
+        parent_name = parent.name if parent else None
+        bones.append((bone.name, parent_name))
+
+    # Sort bones based on hierarchy depth
+    sorted_bones = sorted(bones, key=lambda x: get_generation(x[1], bones))
+    return [bone[0] for bone in sorted_bones]
+
+# Function to determine hierarchy depth of a bone
+def get_generation(bone_name, bones):
+    generation = 0
+    while bone_name:
+        parent_bone = next((b for b in bones if b[0] == bone_name), None)
+        if parent_bone:
+            bone_name = parent_bone[1]
+            generation += 1
+        else:
+            break
+    return generation
+
+# Function to copy-paste transformations correctly
+def copy_paste_bone_transforms(armature1, armature2, sorted_bones):
+    bpy.context.view_layer.objects.active = armature2  # Set source armature active
+    bpy.ops.object.mode_set(mode='POSE')  # Ensure Pose Mode
+
+    for bone_name in sorted_bones:
+        bone1 = armature1.pose.bones.get(bone_name)
+        bone2 = armature2.pose.bones.get(bone_name)
+
+        if bone1 and bone2:
+            # --- COPY TRANSFORM ---
+            bpy.context.view_layer.objects.active = armature2
+            bpy.ops.object.mode_set(mode='POSE')
+
+            bpy.ops.pose.select_all(action='DESELECT')  # Deselect all bones
+            bone2.bone.select = True
+            armature2.data.bones.active = bone2.bone
+
+            # Ensure selection before copying
+            if armature2.data.bones.active == bone2.bone:
+                bpy.ops.object.copy_global_transform()
+            else:
+                print(f"Skipping {bone_name}: Not active for copy")
+                continue
+
+            # --- PASTE TRANSFORM ---
+            bpy.context.view_layer.objects.active = armature1
+            bpy.ops.object.mode_set(mode='POSE')
+
+            bpy.ops.pose.select_all(action='DESELECT')  # Deselect all bones
+            bone1.bone.select = True
+            armature1.data.bones.active = bone1.bone
+
+            # Ensure selection before pasting
+            if armature1.data.bones.active == bone1.bone:
+                try:
+                    bpy.ops.object.paste_transform(method='CURRENT', use_mirror=False)
+                except RuntimeError as e:
+                    print(f"Skipping {bone_name}: Error pasting - {e}")
+            else:
+                print(f"Skipping {bone_name}: Not active for paste")
+
+    print("Bone transforms copied successfully!")
+
+# Run the script if both armatures exist
+if armature1 and armature2:
+    sorted_bones = get_sorted_bones(armature2)  # Get sorted bones from source
+    copy_paste_bone_transforms(armature1, armature2, sorted_bones)
+else:
+    print("Please ensure both armatures exist in the scene.")
