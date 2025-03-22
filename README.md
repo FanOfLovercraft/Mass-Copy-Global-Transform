@@ -1,0 +1,1 @@
+Copy global transform is a great addon, but works only on a single bone. I needed to change the entire armature. Warning!: It was written with the assumption that armature1 has all bones of armature2 and they all have the same names.
